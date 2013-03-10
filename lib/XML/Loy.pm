@@ -5,7 +5,7 @@ use Carp qw/croak carp/;
 use Scalar::Util 'blessed';
 use Mojo::Base 'Mojo::DOM';
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 # Todo:
 #   Maybe necessary: *AUTOLOAD = \&XML::Loy::AUTOLOAD;
@@ -25,6 +25,8 @@ our $VERSION = '0.06';
 #         prefixing.
 #
 # Delete use of "constant"!
+# set() should really try to overwrite.
+
 
 our @CARP_NOT;
 
@@ -820,8 +822,11 @@ sub AUTOLOAD {
     };
   };
 
-  my $errstr = qq{Can't locate "${method}()" in "$package"};
-  $errstr .= ' with ' . join(', ', @ext) . ' extensions' if @ext;
+  my $errstr = qq{Can't locate "${method}" in "$package"};
+  if (@ext) {
+    $errstr .= ' with extension' . (@ext > 1 ? 's' : '');
+    $errstr .= ' "' . join('", "', @ext) . '"';
+  };
 
   carp $errstr and return;
 };
