@@ -5,7 +5,7 @@ use Carp qw/croak carp/;
 use Scalar::Util 'blessed';
 use Mojo::Base 'Mojo::DOM';
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 # Todo:
 #   Maybe necessary: *AUTOLOAD = \&XML::Loy::AUTOLOAD;
@@ -296,7 +296,7 @@ sub _add_clean {
   my $self = shift;
 
   # Node is a node object
-  if (ref $_[0]) {
+  if (blessed $_[0] && $_[0]->can('to_xml')) {
 
     # Serialize node
     my $node = $self->SUPER::new( shift->to_xml );
