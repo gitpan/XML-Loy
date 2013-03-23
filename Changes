@@ -1,7 +1,9 @@
+0.11 2013-03-23
+        - Fixed bug in RFC822.
+
 0.10 2013-03-21
         - Update Dependency (Unicode).
 	- Add Unicode test.
-	- Check for blessed object in _add_clean.
 
 0.09 2013-03-16
         - Added Date::RFC822.

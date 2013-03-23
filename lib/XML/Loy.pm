@@ -5,7 +5,7 @@ use Carp qw/croak carp/;
 use Scalar::Util 'blessed';
 use Mojo::Base 'Mojo::DOM';
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 # Todo:
 #   Maybe necessary: *AUTOLOAD = \&XML::Loy::AUTOLOAD;
@@ -296,7 +296,7 @@ sub _add_clean {
   my $self = shift;
 
   # Node is a node object
-  if (blessed $_[0] && $_[0]->can('to_xml')) {
+  if (ref $_[0]) {
 
     # Serialize node
     my $node = $self->SUPER::new( shift->to_xml );
@@ -1077,7 +1077,8 @@ When adding, returns the number of successfully added extensions.
 When getting, returns the array of associated extensions.
 
 With this package the following extensions are bundled:
-L<Atom|XML::Loy::Atom>, L<ActivityStreams|XML::Loy::ActivityStreams>,
+L<Atom|XML::Loy::Atom>, L<Atom-Threading|XML::Loy::Atom::Threading>,
+L<ActivityStreams|XML::Loy::ActivityStreams>,
 L<XRD|XML::Loy::XRD>, and L<HostMeta|XML::Loy::HostMeta>.
 See L<Extensions|/Extensions> for further information.
 
