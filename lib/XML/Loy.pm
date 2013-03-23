@@ -5,7 +5,7 @@ use Carp qw/croak carp/;
 use Scalar::Util 'blessed';
 use Mojo::Base 'Mojo::DOM';
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 # Todo:
 #   Maybe necessary: *AUTOLOAD = \&XML::Loy::AUTOLOAD;
@@ -67,7 +67,9 @@ sub import {
   no strict 'refs';
   sub _namespace { ${"${_[0]}::NAMESPACE"}  || '' };
   sub _prefix    { ${"${_[0]}::PREFIX"}     || '' };
-  sub mime       { ${ref($_[0]) . '::MIME'} || 'application/xml' };
+  sub mime       {
+    ${ (blessed $_[0] || $_[0]) . '::MIME'} || 'application/xml'
+  };
 };
 
 
@@ -156,7 +158,7 @@ sub add {
   };
 
   # Add element
-  my $element = $self->_add_clean(@_);
+  my $element = $self->_add_clean(@_) or return;
 
   my $tree = $element->tree;
 
@@ -248,7 +250,7 @@ sub set {
   unshift(@_, $tag) unless blessed $_[0];
 
   # Add element (Maybe prefixed)
-  return $self->_add_clean(@_);
+  return $self->_add_clean(@_) or return;
 };
 
 
@@ -351,6 +353,10 @@ sub _add_clean {
   # Node is a string
   else {
     my $name = shift;
+
+    # Pretty sloppy check for valid names
+    return unless $name =~ m!^-?[^\s<>]+$!;
+
     my $att  = shift if ref( $_[0] ) eq 'HASH';
     my ($text, $comment) = @_;
 
