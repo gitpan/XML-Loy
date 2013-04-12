@@ -2,14 +2,15 @@ package XML::Loy;
 use Mojo::ByteStream 'b';
 use Mojo::Loader;
 use Carp qw/croak carp/;
-use Scalar::Util 'blessed';
+use Scalar::Util qw/blessed weaken/;
 use Mojo::Base 'Mojo::DOM';
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 
 # Todo:
 #  - Add ->clone
+#    (Maybe via JSON serialisation of ->tree or using Storable or Dumper)
 #
 #   Maybe necessary: *AUTOLOAD = \&XML::Loy::AUTOLOAD;
 #
@@ -82,7 +83,7 @@ sub new {
 
   # Create from parent class
   unless ($_[0]) {                 # Empty constructor
-    return $class->SUPER::new;
+    return $class->SUPER::new->xml(1);
   }
 
   elsif (ref $_[0]) {              # XML::Loy object
@@ -90,7 +91,7 @@ sub new {
   }
 
   elsif (index($_[0],'<') >= 0 || index($_[0],' ') >= 0) {  # XML string
-    return $class->SUPER::new(@_);
+    return $class->SUPER::new->xml(1)->parse(@_);
   }
 
   # Create a new node
@@ -123,10 +124,7 @@ sub new {
     push(@$element, [text => $text]) if $text;
 
     # Create root element by parent class
-    my $root = $class->SUPER::new;
-
-    # Set object to xml strict
-    $root->xml(1);
+    my $root = $class->SUPER::new->xml(1);
 
     # Add newly created tree
     $root->tree($tree);
@@ -154,7 +152,10 @@ sub add {
   my $tag = $_[0];
 
   # If node is root, use first element
-  if (!$self->parent && $self->tree->[1]->[0] eq 'pi') {
+  if (!$self->parent &&
+	ref($self->tree->[1]) &&
+	  ref($self->tree->[1]) eq 'ARRAY' &&
+	    $self->tree->[1]->[0] eq 'pi') {
     $self = $self->at('*');
   };
 
@@ -296,6 +297,7 @@ sub children {
   return Mojo::Collection->new(@children);
 }
 
+
 # Append a new child node to the XML Node
 sub _add_clean {
   my $self = shift;
@@ -304,7 +306,9 @@ sub _add_clean {
   if (ref $_[0]) {
 
     # Serialize node
-    my $node = $self->SUPER::new( shift->to_xml );
+    my $node = $self->SUPER::new->xml(1)->parse(
+      shift->to_xml
+    );
 
     # Get root attributes
     my $root_attr = $node->_root_element->[2];
@@ -336,7 +340,7 @@ sub _add_clean {
       my $ext = $base_root_attr->{'loy:ext'};
 
       $base_root_attr->{'loy:ext'} =
-	join('; ', $ext, split(/;\s/, $root_attr->{'loy:ext'}));
+	join('; ', $ext, split(/;\s/, delete $root_attr->{'loy:ext'}));
     };
 
 
@@ -452,7 +456,13 @@ sub extension {
   my $self = shift;
 
   # Get root element
-  my $root = $self->_root_element or return;
+  my $root = $self->_root_element;
+
+  # No root to associate extension to
+  unless ($root) {
+    carp 'There is no document to associate the extension with';
+    return;
+  };
 
   # Get ext string
   my @ext = split(/;\s/, $root->[2]->{'loy:ext'} || '');
@@ -517,6 +527,54 @@ sub namespace {
   # Save namespace as attribute
   $root->[2]->{'xmlns' . ($prefix ? ":$prefix" : '')} = $ns;
   return $prefix;
+};
+
+
+# As another object
+sub as {
+  my $self = shift;
+
+  # Base object
+  my $base = shift;
+
+  # New Loader
+  my $loader = Mojo::Loader->new;
+
+  # Default 'XML::Loy::' prefix
+  if (index($base, '-') == 0) {
+    for ($base) {
+
+      # Was Loy prefix
+      s/^-Loy$/XML::Loy/;
+      s/^-/XML::Loy::/;
+    };
+  };
+
+  # Unable to load extension
+  if (my $e = $loader->load($base)) {
+    carp "Exception: $e"  if ref $e;
+    carp qq{Unable to load base class "$e"};
+    return;
+  };
+
+  # Create new base document
+  my $xml = $base->new( $self->to_xml );
+
+  # Set base namespace
+  if ($base->_namespace) {
+    $xml->namespace( $base->_namespace );
+  };
+
+  # Delete extension information
+  $xml->find('*[loy\:ext]')->each(
+    sub { delete $_->{attrs}->{'loy:ext'} }
+  );
+
+  # Add extensions
+  $xml->extension( @_ );
+
+  # Return XML document
+  return $xml;
 };
 
 
@@ -1094,6 +1152,10 @@ Adds or returns an array of extensions.
 When adding, returns the number of successfully added extensions.
 When getting, returns the array of associated extensions.
 
+The extensions are associated to the document, they are not associated
+to the object. That means, you can't add extensions to documents
+without a root node.
+
 With this package the following extensions are bundled:
 L<Atom|XML::Loy::Atom>, L<Atom-Threading|XML::Loy::Atom::Threading>,
 L<ActivityStreams|XML::Loy::ActivityStreams>,
@@ -1103,6 +1165,35 @@ to be located in the C<XML::Loy> namespace, making C<XML::Loy::Atom>
 and C<-Atom> equivalent.
 
 See L<Extensions|/Extensions> for further information.
+
+B<Note:> The return value of the extension method is experimental
+and may change without warnings.
+
+
+=head2 as
+
+  my $xml = XML::Loy->new('<XRD><Subject>akron</Subject></XRD>');
+  my $xrd = $xml->as(-XRD, -HostMeta);
+
+  $xrd->alias('acct:akron@sojolicio.us');
+
+  print $xrd->to_pretty_xml;
+
+  # <XRD xmlns="http://docs.oasis-open.org/ns/xri/xrd-1.0"
+  #      xmlns:hm="http://host-meta.net/xrd/1.0"
+  #      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  #   <Subject>akron</Subject>
+  #   <Alias>acct:akron@sojolicio.us</Alias>
+  # </XRD>
+
+Convert an L<XML::Loy> based object to another object.
+Accepts the base class and optionally a list of extensions.
+This only changes the namespace of the base class - extensions
+will stay intact.
+
+See L<Extensions|/Extensions> for further information.
+
+B<Note:> This method is experimental and may change without warnings!
 
 
 =head2 mime
