@@ -1,3 +1,8 @@
+0.17 2013-04-22
+        - Added experimental on_init hook.
+	- Made -base faster.
+	- Changed return value of extension().
+
 0.16 2013-04-12
         - Fixed a small bug in extension copying.
 	- Fixed a huge bug in XML treatment of strings.

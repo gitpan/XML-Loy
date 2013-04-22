@@ -5,7 +5,7 @@ use Carp qw/croak carp/;
 use Scalar::Util qw/blessed weaken/;
 use Mojo::Base 'Mojo::DOM';
 
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 
 
 # Todo:
@@ -30,6 +30,14 @@ our $VERSION = '0.16';
 #      prefixing.
 #
 # - set() should really try to overwrite.
+#
+# - add() with -before => '' and -after => ''
+#  - maybe possible to save to element
+#  - Maybe with small changes a change to the object
+#    (encoding, xml etc.) can be done
+#
+# - closest() (jQuery)
+
 
 our @CARP_NOT;
 
@@ -41,9 +49,6 @@ sub import {
 
   if ($flag =~ /^-?(?i:with|base)$/) {
 
-    # Get class variables
-    my %param = @_;
-
     # Allow for manipulating the symbol table
     no strict 'refs';
     no warnings 'once';
@@ -52,9 +57,22 @@ sub import {
     my $caller = caller;
     push @{"${caller}::ISA"}, __PACKAGE__;
 
-    # Set class variables
-    foreach (qw/namespace prefix mime/) {
-      ${ "${caller}::" . uc $_} = $param{$_} if exists $param{$_};
+    if (@_) {
+
+      # Get class variables
+      my %param = @_;
+
+      # Set class variables
+      foreach (qw/namespace prefix mime/) {
+	if (exists $param{$_}) {
+	  ${ "${caller}::" . uc $_ } = delete $param{$_};
+	};
+      };
+
+      # Set class hook
+      if (exists $param{on_init}) {
+	*{"${caller}::ON_INIT"} = delete $param{on_init};
+      };
     };
   };
 
@@ -69,10 +87,29 @@ sub import {
 # Return class variables
 {
   no strict 'refs';
-  sub _namespace { ${"${_[0]}::NAMESPACE"}  || '' };
-  sub _prefix    { ${"${_[0]}::PREFIX"}     || '' };
+  sub _namespace { ${"${_[0]}::NAMESPACE"}   || '' };
+  sub _prefix    { ${"${_[0]}::PREFIX"}      || '' };
   sub mime       {
-    ${ (blessed $_[0] || $_[0]) . '::MIME'} || 'application/xml'
+    ${ (blessed $_[0] || $_[0]) . '::MIME'}  || 'application/xml'
+  };
+  sub _on_init   {
+    my $class = shift;
+    my $self = $class;
+
+    # Run object method
+    if (blessed $class) {
+      $class = blessed $class;
+    }
+
+    # Run class method
+    else {
+      $self = shift;
+    };
+
+    # Run init hook
+    if ($class->can('ON_INIT')) {
+      *{"${class}::ON_INIT"}->($self) ;
+    };
   };
 };
 
@@ -81,17 +118,22 @@ sub import {
 sub new {
   my $class = shift;
 
+  my $self;
+
   # Create from parent class
-  unless ($_[0]) {                 # Empty constructor
-    return $class->SUPER::new->xml(1);
+  # Empty constructor
+  unless ($_[0]) {
+    $self = $class->SUPER::new->xml(1);
   }
 
-  elsif (ref $_[0]) {              # XML::Loy object
-    return $class->SUPER::new(@_);
+  # XML::Loy object
+  elsif (ref $_[0]) {
+    $self = $class->SUPER::new(@_)->xml(1);
   }
 
-  elsif (index($_[0],'<') >= 0 || index($_[0],' ') >= 0) {  # XML string
-    return $class->SUPER::new->xml(1)->parse(@_);
+  # XML string
+  elsif (index($_[0],'<') >= 0 || index($_[0],' ') >= 0) {
+    $self = $class->SUPER::new->xml(1)->parse(@_);
   }
 
   # Create a new node
@@ -124,10 +166,10 @@ sub new {
     push(@$element, [text => $text]) if $text;
 
     # Create root element by parent class
-    my $root = $class->SUPER::new->xml(1);
+    $self = $class->SUPER::new->xml(1);
 
     # Add newly created tree
-    $root->tree($tree);
+    $self->tree($tree);
 
     # The class is derived
     if ($class ne __PACKAGE__) {
@@ -136,11 +178,15 @@ sub new {
       if (my $ns = $class->_namespace) {
 	$att->{xmlns} = $ns;
       };
-    };
 
-    # Return root node
-    return $root;
+    };
   };
+
+  # Start init hook
+  $self->_on_init;
+
+  # Return root node
+  return $self;
 };
 
 
@@ -265,6 +311,14 @@ sub children {
   # It works as written in the documentation,
   # but is also aware of namespace prefixes.
 
+  # If node is root, use first element
+  if (!$self->parent &&
+	ref($self->tree->[1]) &&
+	  ref($self->tree->[1]) eq 'ARRAY' &&
+	    $self->tree->[1]->[0] eq 'pi') {
+    $self = $self->at('*');
+  };
+
   my @children;
   my $charset = $self->charset;
   my $xml     = $self->xml;
@@ -290,7 +344,7 @@ sub children {
       };
     };
 
-    push @children, $self->new->charset($charset)->tree($e)->xml($xml);
+    push(@children, $self->new->charset($charset)->tree($e)->xml($xml));
   }
 
   # Create new Mojo::Collection
@@ -472,8 +526,6 @@ sub extension {
   # New Loader
   my $loader = Mojo::Loader->new;
 
-  my $loaded = 0;
-
   # Try all given extension names
   while (my $ext = shift( @_ )) {
 
@@ -493,7 +545,9 @@ sub extension {
 
     # Add extension to extensions list
     push(@ext, $ext);
-    $loaded++;
+
+    # Start init hook
+    $ext->_on_init($self);
 
     if ((my $n_ns = $ext->_namespace) &&
 	  (my $n_pref = $ext->_prefix)) {
@@ -504,7 +558,7 @@ sub extension {
   # Save extension list as attribute
   $root->[2]->{'loy:ext'} = join('; ', @ext);
 
-  return $loaded;
+  return $self;
 };
 
 
@@ -559,6 +613,9 @@ sub as {
 
   # Create new base document
   my $xml = $base->new( $self->to_xml );
+
+  # Start init hook
+  $xml->_on_init;
 
   # Set base namespace
   if ($base->_namespace) {
@@ -1141,7 +1198,7 @@ If a node already has a comment, comments will be merged.
 =head2 extension
 
   # Add extensions
-  my $nr = $xml->extension('Fun', 'XML::Loy::Atom', -HostMeta);
+  my $xml = $xml->extension('Fun', 'XML::Loy::Atom', -HostMeta);
 
   # Further additions
   $xml->extension(-Atom::Threading);
@@ -1149,7 +1206,7 @@ If a node already has a comment, comments will be merged.
   my @extensions = $xml->extension;
 
 Adds or returns an array of extensions.
-When adding, returns the number of successfully added extensions.
+When adding, returns the document.
 When getting, returns the array of associated extensions.
 
 The extensions are associated to the document, they are not associated
