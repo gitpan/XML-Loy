@@ -5,7 +5,7 @@ use Carp qw/croak carp/;
 use Scalar::Util qw/blessed weaken/;
 use Mojo::Base 'Mojo::DOM';
 
-our $VERSION = '0.19';
+our $VERSION = '0.20';
 
 
 # Todo:
@@ -32,9 +32,9 @@ our $VERSION = '0.19';
 # - set() should really try to overwrite.
 #
 # - add() with -before => '' and -after => ''
-#  - maybe possible to save to element
-#  - Maybe with small changes a change to the object
-#    (encoding, xml etc.) can be done
+#   - maybe possible to save to element
+#   - Maybe with small changes a change to the object
+#     (encoding, xml etc.) can be done
 #
 # - closest() (jQuery)
 
@@ -154,16 +154,16 @@ sub new {
     ];
 
     # Add comment if given
-    push(@$tree, [comment => $comment]) if $comment;
+    push(@$tree, [ comment => $comment ]) if $comment;
 
     # Create Tag element
-    my $element = ['tag', $name, $att, $tree];
+    my $element = [ tag => $name, $att, $tree ];
 
     # Add element
     push(@$tree, $element);
 
     # Add text if given
-    push(@$element, [text => $text]) if $text;
+    push(@$element, [ text => $text ]) if $text;
 
     # Create root element by parent class
     $self = $class->SUPER::new->xml(1);
@@ -347,8 +347,8 @@ sub children {
   }
 
   # Create new Mojo::Collection
-  return Mojo::Collection->new(@children);
-}
+  return Mojo::Collection->new( @children );
+};
 
 
 # Append a new child node to the XML Node
@@ -359,9 +359,7 @@ sub _add_clean {
   if (ref $_[0]) {
 
     # Serialize node
-    my $node = $self->SUPER::new->xml(1)->parse(
-      shift->to_xml
-    );
+    my $node = $self->SUPER::new->xml(1)->tree( shift->tree );
 
     # Get root attributes
     my $root_attr = $node->_root_element->[2];
@@ -463,7 +461,7 @@ sub _special_attributes {
   foreach ( grep { index($_, '-') == 0 } keys %$att ) {
 
     # Set special attribute
-    $att->{'loy:' . substr($_, 1) } = lc(delete $att->{$_});
+    $att->{'loy:' . substr($_, 1) } = lc delete $att->{$_};
   };
 };
 
@@ -623,7 +621,9 @@ sub as {
 
   # Delete extension information
   $xml->find('*[loy\:ext]')->each(
-    sub { delete $_->{attrs}->{'loy:ext'} }
+    sub {
+      delete $_->{attrs}->{'loy:ext'}
+    }
   );
 
   # Add extensions
@@ -802,8 +802,7 @@ sub _element {
 	};
 
 	# Correct Indent
-	$content .= ('  ' x $i);
-
+	$content .= '  ' x $i;
       };
     }
 
@@ -1213,9 +1212,12 @@ to the object. That means, you can't add extensions to documents
 without a root node.
 
 With this package the following extensions are bundled:
-L<Atom|XML::Loy::Atom>, L<Atom-Threading|XML::Loy::Atom::Threading>,
+L<Atom|XML::Loy::Atom>,
+L<Atom-Threading|XML::Loy::Atom::Threading>,
 L<ActivityStreams|XML::Loy::ActivityStreams>,
-L<XRD|XML::Loy::XRD>, and L<HostMeta|XML::Loy::HostMeta>.
+L<GeoRSS|XML::Loy::GeoRSS>,
+L<XRD|XML::Loy::XRD>,
+and L<HostMeta|XML::Loy::HostMeta>.
 If an extension has a leading minus symbol, it is assumed
 to be located in the C<XML::Loy> namespace, making C<XML::Loy::Atom>
 and C<-Atom> equivalent.
