@@ -16,7 +16,7 @@ WriteMakefile(
   },
   PREREQ_PM => {
     'Mojolicious' => '4.81',
-    'Time::Local' => 0
+    'Time::Local' => '1.2'
   },
   LICENSE     => 'perl',
   META_MERGE  => {

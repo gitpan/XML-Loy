@@ -5,7 +5,7 @@ use Carp qw/croak carp/;
 use Scalar::Util qw/blessed weaken/;
 use Mojo::Base 'Mojo::DOM';
 
-our $VERSION = '0.26';
+our $VERSION = '0.27';
 
 
 # Todo:
@@ -47,7 +47,7 @@ sub import {
 
   return unless my $flag = shift;
 
-  if ($flag =~ /^-?(?i:with|base)$/) {
+  if ($flag =~ /^-?(?i:base|with)$/) {
 
     # Allow for manipulating the symbol table
     no strict 'refs';

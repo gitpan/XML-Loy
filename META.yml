@@ -21,9 +21,9 @@ no_index:
     - inc
 requires:
   Mojolicious: '4.81'
-  Time::Local: '0'
+  Time::Local: '1.2'
   perl: '5.010001'
 resources:
   license: http://www.opensource.org/licenses/artistic-license-2.0
   repository: https://github.com/Akron/XML-Loy
-version: '0.26'
+version: '0.27'
