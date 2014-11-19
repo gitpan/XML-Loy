@@ -15,7 +15,7 @@ WriteMakefile(
     'Scalar::Util' => 0
   },
   PREREQ_PM => {
-    'Mojolicious' => '4.81',
+    'Mojolicious' => '5.57',
     'Time::Local' => '1.2'
   },
   LICENSE     => 'perl',
